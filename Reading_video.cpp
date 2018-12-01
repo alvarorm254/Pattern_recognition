@@ -12,7 +12,7 @@ using namespace std;
 using namespace cv;
 
 int main(int argc, char const *argv[]) {
-  VideoCapture cap("calibration_kinectv2.avi");
+  VideoCapture cap("PadronAnillos_01.avi");
   if(!cap.isOpened()){
     cout << "Error opening video stream or file" << endl;
     return -1;
