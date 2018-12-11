@@ -13,31 +13,27 @@
 using namespace std;
 using namespace cv;
 
-
 int main(int argc, char const *argv[])
 {
   //Read video (or camera) & test
   VideoCapture cap("video1.avi");
   if(!cap.isOpened())
-  {
-    cout << "Error opening video stream or file" << endl;
     return -1;
-  }
   
   //Declare variables
-  Mat frame;
-  Mat edges;
-  Mat gray;
-  Mat ellipse_shape;
+  Mat frame,edges,gray,gaussian,ellipse_shape;
   vector<vector<Point>>contours;
-  vector<Point>center(contours.size());
-  vector<Point>center_v;
+  vector<Point>center,center_v;
+  vector<RotatedRect>minRect,minEllipse;
   Point2f rect_points[4];
   
   while(1)
   {
-    vector<Point>center_v;
-    //read & verify
+    //clear variables
+    contours.clear();
+	center_v.clear();
+
+	//read and verify
     cap>>frame;
     if(frame.empty())
       break;
@@ -45,28 +41,28 @@ int main(int argc, char const *argv[])
     //to gray
     cvtColor(frame,gray,cv::COLOR_RGB2GRAY);
 
-    //to edges
-    threshold(gray,edges,100,255,THRESH_BINARY);
+    //gaussian blur
+    GaussianBlur(gray,gaussian,Size(3,3),0,0);
+
+	//to edges
+    threshold(gaussian,edges,100,255,THRESH_BINARY);
+    //TODO: integral threshold
     
-    //get the shape of ellipse and search
+    //dilate and erode for ellipses
     ellipse_shape=getStructuringElement(MORPH_ELLIPSE,Size(2,2),Point(1,1));
-    // Aplying closing algorithm 
     dilate(edges,edges,ellipse_shape);
     erode(edges,edges,ellipse_shape);
-   
-    //find the contours of ellipses, store all points in two level hierachy
-    contours.clear();
-    findContours(edges,contours,CV_RETR_CCOMP,CHAIN_APPROX_NONE,Point(0,0));
     
-    //clear and resize center
-    center.resize(contours.size(),Point(0,0));
+    //find the contours of ellipses
+    findContours(edges,contours,CV_RETR_CCOMP,CHAIN_APPROX_NONE,Point(0,0));
+	//TODO: use hierachy and delete all that not have hierachy
 
     //find the rotated rectangles and ellipses for each contour VALID
-
-    vector<RotatedRect>minRect(contours.size()); //TODO: not re-declare (not urgent)
-    vector<RotatedRect>minEllipse(contours.size()); //TODO: not re-declare (not urgent)
+	cout<<contours.size()<<" ";
+    minRect.resize(contours.size());
+    minEllipse.resize(contours.size());
     int count=0;
-    for(int i=0;i<contours.size();++i) //TODO: to iterators (not urgent)
+    for(int i=0;i<contours.size();++i)
     {
         if(contours[i].size()>16 && contours[i].size()<256) //ex-ante validation
         {
@@ -77,6 +73,7 @@ int main(int argc, char const *argv[])
     }
 	
 	//find the center
+	center.resize(contours.size(),Point(0,0));
     for(int i=0;i<count;++i)
     {
         minRect[i].points(rect_points);
