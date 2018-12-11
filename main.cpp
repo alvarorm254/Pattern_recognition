@@ -67,15 +67,17 @@ int main(int argc, char const *argv[])
 			if(contours[i].size()>256)
 				for(j=0;j<contours.size();++j)
 					if(hierarchy[j][3]==i)
-						hierarchy[j][3]=-1;
+						hierarchy[j][3]=hierarchy[i][3];
 		for(i=0;i<contours.size();++i)
 			if(contours[i].size()<24)
+			{
+				hierarchy[i][2]=-1;
 				if(hierarchy[i][3]!=-1)
 					if(hierarchy[i][0]!=-1)
 						hierarchy[hierarchy[i][3]][2]=hierarchy[i][0];
 					else
 						hierarchy[hierarchy[i][3]][2]=hierarchy[i][1];
-
+			}
 		for(i=0;i<contours.size();++i)
 			if(contours[i].size()<24 || (hierarchy[i][2]==-1 && hierarchy[i][3]==-1) || contours[i].size()>256)
 			{
