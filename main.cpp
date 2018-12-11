@@ -1,4 +1,4 @@
-//g++ Filtro_video.cpp -o app `pkg-config --cflags --libs opencv`
+//g++ main.cpp -o app `pkg-config --cflags --libs opencv`
 #include <iostream>
 #include <string>
 #include <stdlib.h>
@@ -17,7 +17,7 @@ using namespace cv;
 int main(int argc, char const *argv[])
 {
   //Read video (or camera) & test
-  VideoCapture cap("PadronAnillos_01.avi");
+  VideoCapture cap("video1.avi");
   if(!cap.isOpened())
   {
     cout << "Error opening video stream or file" << endl;
