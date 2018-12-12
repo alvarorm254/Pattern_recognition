@@ -6,6 +6,7 @@
 #include <opencv2/opencv.hpp>
 
 #include <opencv2/highgui/highgui.hpp>
+#include "integral_threshold.h"
 //#include <opencv2/plot.hpp>
 
 #include <cmath>
@@ -18,7 +19,7 @@ using namespace cv;
 int main(int argc, char const *argv[])
 {
 	//Read video (or camera) & test
-	VideoCapture cap("video1.avi");
+	VideoCapture cap("../padron1.avi");
 	if(!cap.isOpened())
 		return -1;
 
@@ -33,7 +34,9 @@ int main(int argc, char const *argv[])
 
 	while(1)
 	{
-
+		/*if(count>24)
+			cin>>count;*/
+		
 		//clear variables
 		contours.clear();
 		center_v.clear();
@@ -51,14 +54,17 @@ int main(int argc, char const *argv[])
 		GaussianBlur(gray,gaussian,Size(3,3),0,0);
 
 		//to edges
-		threshold(gaussian,edges,100,255,THRESH_BINARY);
+		//threshold(gaussian,edges,100,255,THRESH_BINARY);
+		edges=integral_threshold(gaussian,0.85);
 		//TODO: integral threshold
+
+		imshow( "edges", edges );
 
 		//dilate and erode for ellipses
 		ellipse_shape=getStructuringElement(MORPH_ELLIPSE,Size(2,2),Point(1,1));
 		erode(edges,edges,ellipse_shape);
 		dilate(edges,edges,ellipse_shape);
-
+		//dilate(edges,edges,ellipse_shape);
 		//find the contours of ellipses
 		findContours(edges,contours,hierarchy,CV_RETR_TREE,CHAIN_APPROX_NONE,Point(0,0)); //can change methods
 		//hierarchy [Next, Previous, First_Child, Parent]
