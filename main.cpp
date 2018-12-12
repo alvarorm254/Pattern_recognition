@@ -29,10 +29,11 @@ int main(int argc, char const *argv[])
 	vector<RotatedRect>minRect,minEllipse;
 	Point2f rect_points[4];
 	vector<Vec4i> hierarchy;
-	int i,j,count,next,previous;
+	int i,j,count,aux;
 
 	while(1)
 	{
+
 		//clear variables
 		contours.clear();
 		center_v.clear();
@@ -62,22 +63,37 @@ int main(int argc, char const *argv[])
 		findContours(edges,contours,hierarchy,CV_RETR_TREE,CHAIN_APPROX_NONE,Point(0,0)); //can change methods
 		//hierarchy [Next, Previous, First_Child, Parent]
 
-		//filter contours TODO: improve performance
+		//filter contours by size and hierarchy
 		for(i=0;i<contours.size();++i)
 			if(contours[i].size()>256)
-				for(j=0;j<contours.size();++j)
-					if(hierarchy[j][3]==i)
-						hierarchy[j][3]=hierarchy[i][3];
-		for(i=0;i<contours.size();++i)
-			if(contours[i].size()<24)
 			{
+				//eliminate in childs
+				aux=hierarchy[i][2];
+				while(aux!=-1)
+				{
+					hierarchy[aux][3]=hierarchy[i][3];
+					aux=hierarchy[aux][0];
+				}
+				//eliminate in father
+				if(hierarchy[hierarchy[i][3]][2]==i)
+					hierarchy[hierarchy[i][3]][2]=hierarchy[i][0];
 				hierarchy[i][2]=-1;
-				if(hierarchy[i][3]!=-1)
-					if(hierarchy[i][0]!=-1)
-						hierarchy[hierarchy[i][3]][2]=hierarchy[i][0];
-					else
-						hierarchy[hierarchy[i][3]][2]=hierarchy[i][1];
+				hierarchy[i][3]=-1;
 			}
+			else
+				if(contours[i].size()<24)
+				{
+					hierarchy[i][2]=-1;
+					//eliminate in father
+					if(hierarchy[i][3]!=-1)
+					{
+						if(hierarchy[hierarchy[i][3]][2]==i)
+							hierarchy[hierarchy[i][3]][2]=hierarchy[i][0];
+						hierarchy[i][3]=-1;
+					}
+				}
+
+		//delete false positive contours
 		for(i=0;i<contours.size();++i)
 			if(contours[i].size()<24 || (hierarchy[i][2]==-1 && hierarchy[i][3]==-1) || contours[i].size()>256)
 			{
