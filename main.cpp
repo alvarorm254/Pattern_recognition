@@ -21,6 +21,7 @@
 #define MIN_ELLIPSE_POINTS 24
 #define MAX_ELLIPSE_POINTS 256
 #define MAX_DISTANCE_CENTERS 4
+#define MIN_ACCEPTANCE 0.8
 
 using namespace std;
 using namespace cv;
@@ -35,14 +36,14 @@ int main(int argc, char const *argv[])
 	//Declare variables
 	Mat frame,edges,gray,gaussian; //ellipse_shape=getStructuringElement(MORPH_ELLIPSE,Size(2,2),Point(1,1));
 	vector<vector<Point>>contours;
-	vector<Point>center,center_v,center_loss,center_aux;
-	Point center1,center2,mass_center;
+	vector<Point>center,last_center;
+	Point center1,center2,mass_center,last_mass_center;
 	//vector<RotatedRect>minEllipse;//minRect;
 	RotatedRect minRect1,minRect2;
 	Point2f rect_points1[4],rect_points2[4];
 	vector<Vec4i> hierarchy;
-	int i,aux,aux2,max_radio,count_all,num_frame=0;
-	vector<int> finded(NUM_RINGS,0);
+	int i,j,aux,aux2,max_radio,count_all,num_frame=0,offset_x,offset_y;
+	vector<int> finded(NUM_RINGS);
 
 	char text[40];
 
@@ -52,13 +53,8 @@ int main(int argc, char const *argv[])
 
 	char c=(char)waitKey(3000);
 
-
 	while(1)
 	{
-		//clear variables
-		center_loss.clear();
-		center_aux.clear();
-
 		//read and verify
 		cap>>frame;
 		if(frame.empty())
@@ -149,6 +145,8 @@ int main(int argc, char const *argv[])
 				}
 			}
 
+		if(center.size()!=NUM_RINGS)
+
 		//delete leftover rings
 		while(center.size()>NUM_RINGS && center.size()!=0)
 		{
@@ -170,8 +168,57 @@ int main(int argc, char const *argv[])
 			//minEllipse.erase(minEllipse.begin()+(2*aux+1)); //TODO: falta probar no es necesario
 		}
 
+		//calculate center of mass
+		mass_center=Point(0,0);
+		for(i=0;i<(int)center.size();++i)
+			mass_center+=center[i];
+		mass_center.x/=center.size();
+		mass_center.y/=center.size();
+
+		//calculate actual offset
+		offset_x=mass_center.x-last_mass_center.x;
+		offset_y=mass_center.y-last_mass_center.y
+
+		//move all centers with the offset
+		for(i=0;i<(int)center.size();++i)
+		{
+			center[i].x+=offset_x;
+			center[i].y+=offset_y;
+		}
+
+		//match with last frame centers
+		fill(finded.begin(),finded.end(),0);
+		for(i=0;i<(int)last_center.size();++i)
+			for(j=0;j<(int)center.size();++i)
+				if(finded[j]==0)
+					if(sqrt(pow((last_center[i].x-center[j].x),2)+pow((last_center[i].y-center[j].y),2))<MAX_DISTANCE_CENTERS)
+					{
+						finded[j]=1;
+						last_center[i]=center[j];
+					}
+
+		//match with last frame centers
+		fill(finded.begin(),finded.end(),0);
+		for(i=0;i<(int)last_center.size();++i)
+			for(j=0;j<(int)center.size();++i)
+				if(finded[j]==0)
+					if(sqrt(pow((last_center[i].x-center[j].x),2)+pow((last_center[i].y-center[j].y),2))<MAX_DISTANCE_CENTERS)
+					{
+						finded[j]=1;
+						last_center[i]=center[j];
+					}
+
+		aux=0;
+		for(std::vector<int>::iterator it=finded.begin();it!=finded.end();++it)
+		    aux+=*it;
+
+		if((float)aux>MIN_ACCEPTANCE*NUM_RINGS)
+		{
+			
+		}
+
 		//print the id-number of the ring
-		for(i=0;i<(int)center.size();i++)
+		for(i=0;i<(int)center.size();++i)
 		{
 			circle(frame,center[i],3.0,Scalar(0,255,0),-1,CV_AA);
 			sprintf(text,"%d",i);
@@ -180,7 +227,6 @@ int main(int argc, char const *argv[])
 
 		sprintf(text,"Rings: %d",(int)center.size());
 		putText(frame,text,Point2f(15,40),FONT_HERSHEY_PLAIN,1.25,Scalar(0,0,255,255),1);
-
 
 		//TODO: using bounding boxes for teletransportation of bad friend
 
