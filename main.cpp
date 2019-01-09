@@ -30,17 +30,18 @@ int main(int argc, char const *argv[])
 		return -1;
 
 	//Declare variables
-	Mat frame,edges,gray,gaussian,ellipse_shape=getStructuringElement(MORPH_ELLIPSE,Size(2,2),Point(1,1));
-	vector<vector<Point>>contours;
+	Mat frame,edges,gray,gaussian; //ellipse_shape=getStructuringElement(MORPH_ELLIPSE,Size(2,2),Point(1,1));
+	vector<vector<Point>>contours,contours_v;
 	vector<Point>center,center_v,center_loss,center_aux;
-	vector<RotatedRect>minRect,minEllipse;
+	vector<RotatedRect>minEllipse;//minRect;
+	RotatedRect minRect;
 	Point2f rect_points[4];
 	vector<Vec4i> hierarchy;
-	int i,j,k,count,aux,max_radio;
+	int i,j,k,aux,max_radio,count,count_all,num_frame=0;
 	Point mean_center;
 	vector<int> finded(NUM_RINGS,0);
 
-	char time[15],id[11];
+	char text[40];
 
 	double start_time;
 
@@ -52,15 +53,14 @@ int main(int argc, char const *argv[])
 	while(1)
 	{
 		//clear variables
-		contours.clear();
 		center_loss.clear();
 		center_aux.clear();
-		hierarchy.clear();
 
 		//read and verify
 		cap>>frame;
 		if(frame.empty())
 			break;
+		num_frame++;
 
 		start_time=omp_get_wtime();
 
@@ -74,16 +74,16 @@ int main(int argc, char const *argv[])
 		//threshold(gaussian,edges,100,255,THRESH_BINARY);
 		edges=integral_threshold(gaussian,0.85);
 
-		/*dilate and erode for ellipses
-		erode(edges,edges,ellipse_shape);
-		dilate(edges,edges,ellipse_shape);*/
-
 		//find the contours of ellipses
+		contours.clear();
+		hierarchy.clear();
 		findContours(edges,contours,hierarchy,CV_RETR_TREE,CHAIN_APPROX_NONE,Point(0,0)); //can change methods
 		//hierarchy [Next, Previous, First_Child, Parent]
 
-		//filter contours by size and HIERARCHY AND SIZE **24 < size < 256**
-		for(i=0;i<(int)contours.size();++i)
+		count=contours.size();
+
+		//"delete" (HYERARCHY[2],[3]=-1) contours by size **24 < size < 256**
+		for(i=0;i<count;++i)
 			if(contours[i].size()>256)
 			{
 				//eliminate in childs
@@ -112,31 +112,42 @@ int main(int argc, char const *argv[])
 					}
 				}
 
-		//delete false positive contours in sizes **24 < size < 256** or if no have childrens or father
-		for(i=0;i<(int)contours.size();++i)
-			if(contours[i].size()<24 || (hierarchy[i][2]==-1 && hierarchy[i][3]==-1) || contours[i].size()>256)
-			//TODO: verificar || (hierarchy[i][2]==-1 && (hierarchy[i][0]!=-1 || hierarchy[i][1]!=-1)
+		//"delete" (HYERARCHY[2],[3]=-1) father and childs, when the number of childs is bigger than 1
+		for(i=0;i<count;++i)
+		{
+			if(hierarchy[i][3]!=-1 && (hierarchy[i][0]!=-1 || hierarchy[i][1]!=-1))
 			{
-				contours.erase(contours.begin()+i);
-				hierarchy.erase(hierarchy.begin()+i);
-				--i;
+				hierarchy[hierarchy[i][3]][2]=-1;
+				hierarchy[hierarchy[i][3]][3]=-1;
+				hierarchy[i][2]=-1;
+				hierarchy[i][3]=-1;
+			}
+		}
+
+		//save to contours_v the valid contours, %2 positions are father and %2+1 are child
+		contours_v.clear();
+		for(i=0;i<count;++i)
+			if(hierarchy[i][2]!=-1)
+			{
+				contours_v.push_back(contours[i]);
+				contours_v.push_back(contours[hierarchy[i][2]]);
 			}
 
-		count=contours.size();
+		count=contours_v.size();
 
-		//TODO: delete when count>NUM_ELLIPSES, hierarchy can help
+		//TODO: delete when count>NUM_ELLIPSES, center can help
 
 		//find the rotated rectangles, ellipses and centers
-		minRect.resize(count);
+		//minRect.resize(count);
 		minEllipse.resize(count);
 		center.resize(count);
-		
+
 		max_radio=0;
 		for(i=0;i<count;++i)
 		{
-			minEllipse[i]=fitEllipse(Mat(contours[i]));
-			minRect[i]=minAreaRect(Mat(contours[i]));
-			minRect[i].points(rect_points);
+			minEllipse[i]=fitEllipse(Mat(contours_v[i]));
+			minRect=minAreaRect(Mat(contours_v[i]));
+			minRect.points(rect_points);
 			center[i]=Point((rect_points[0].x+rect_points[2].x)/2,(rect_points[0].y+rect_points[2].y)/2);
 			if(abs(rect_points[0].x-rect_points[2].x)/2>max_radio)
 				max_radio=abs(rect_points[0].x-rect_points[2].x)/2;
@@ -148,6 +159,17 @@ int main(int argc, char const *argv[])
 		//TODO: using bounding boxes for teletransportation of bad friend
 
 		//TODO: for no rastered points, use the moviment of another points to predict the future location
+
+		for(i=0;i<count;++i)
+		{
+			ellipse(frame,minEllipse[i],Scalar(0,255,0),1,CV_AA);
+		}
+
+		sprintf(text,"Ellipses: %d/%d",count,count_all);
+			putText(frame,text,Point2f(15,85),FONT_HERSHEY_PLAIN,1.25,Scalar(0,0,255,255),1);
+
+		sprintf(text,"Frame: %d",num_frame);
+			putText(frame,text,Point2f(15,115),FONT_HERSHEY_PLAIN,1.25,Scalar(0,0,255,255),1);
 
 		//ex-post validation, distance of center heuristic
 		for(i=0;i<count;++i)
@@ -181,21 +203,17 @@ int main(int argc, char const *argv[])
 						{
 							center.erase(center.begin()+j);
 							minEllipse.erase(minEllipse.begin()+j);
-							minRect.erase(minRect.begin()+j);
 
 							center.erase(center.begin()+i);
 							minEllipse.erase(minEllipse.begin()+i);
-							minRect.erase(minRect.begin()+i);
 						}
 						else
 						{
 							center.erase(center.begin()+i);
 							minEllipse.erase(minEllipse.begin()+i);
-							minRect.erase(minRect.begin()+i);
 
 							center.erase(center.begin()+j);
 							minEllipse.erase(minEllipse.begin()+j);
-							minRect.erase(minRect.begin()+j);
 							i--;
 						}
 
@@ -208,7 +226,7 @@ int main(int argc, char const *argv[])
 		if(center_v.size()==0) //only when is the first frame or no one are matched
 		{
 			center_v=center_loss;
-			fill(
+			//fill(
 		}
 
 		if(center_loss.size()>2)
@@ -222,8 +240,8 @@ int main(int argc, char const *argv[])
 
 		for(i=0;i<(int)center_v.size();++i)
 		{
-			sprintf(id,"%d",i);
-			putText(frame,id,center_v[i],FONT_HERSHEY_PLAIN,2,Scalar(0,0,255,255),2);
+			sprintf(text,"%d",i);
+			putText(frame,text,center_v[i],FONT_HERSHEY_PLAIN,2,Scalar(0,0,255,255),2);
 		}
 
 		//put in rame some important data
@@ -232,19 +250,24 @@ int main(int argc, char const *argv[])
 			full++;
 		all++;
 
-		sprintf(time,"acc: %.2f",100.0*(float)full/float(all));
-		putText(frame,time,Point2f(15,55),FONT_HERSHEY_PLAIN,1.5,Scalar(0,0,255,255),2);
+		sprintf(text,"Time: %.3f",omp_get_wtime()-start_time);
+		putText(frame,text,Point2f(15,25),FONT_HERSHEY_PLAIN,1.25,Scalar(0,0,255,255),1);
 
-		sprintf(time,"Time: %.3f",omp_get_wtime()-start_time);
-		putText(frame,time,Point2f(15,25),FONT_HERSHEY_PLAIN,1.5,Scalar(0,0,255,255),2);
+		sprintf(text,"acc: %.2f",100.0*(float)full/float(all));
+		putText(frame,text,Point2f(15,55),FONT_HERSHEY_PLAIN,1.25,Scalar(0,0,255,255),1);
 
 		//TODO TODO: tracking of points based on the center and tracing lines
 		imshow( "Frame", frame );
 
 		// Press  ESC on keyboard to exit
-		char c=(char)waitKey(10);
+		char c=(char)waitKey(1);
 		if(c==27)
 			break;
+
+		cout<<count_all<<"/"<<NUM_ELLIPSES<<"\n";
+
+		if(count_all>NUM_ELLIPSES)
+			cin>>c;
 	}
 
 	cout<<"\nNumber of frames: "<<all;
