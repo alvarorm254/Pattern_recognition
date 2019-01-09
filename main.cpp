@@ -13,11 +13,14 @@
 
 #include <cmath>
 
-#define ROWS 4
-#define COLS 5
+#define ROWS 3
+#define COLS 4
 #define NUM_RINGS ROWS*COLS
 #define NUM_ELLIPSES ROWS*COLS*2
 #define THREAD_COUNT 8
+#define MIN_ELLIPSE_POINTS 24
+#define MAX_ELLIPSE_POINTS 256
+#define MAX_DISTANCE_CENTERS 4
 
 using namespace std;
 using namespace cv;
@@ -25,27 +28,27 @@ using namespace cv;
 int main(int argc, char const *argv[])
 {
 	//Read video (or camera) & test
-	VideoCapture cap("../padron2.avi");
+	VideoCapture cap("../padron1.avi");
 	if(!cap.isOpened())
 		return -1;
 
 	//Declare variables
 	Mat frame,edges,gray,gaussian; //ellipse_shape=getStructuringElement(MORPH_ELLIPSE,Size(2,2),Point(1,1));
-	vector<vector<Point>>contours,contours_v;
+	vector<vector<Point>>contours;
 	vector<Point>center,center_v,center_loss,center_aux;
-	vector<RotatedRect>minEllipse;//minRect;
-	RotatedRect minRect;
-	Point2f rect_points[4];
+	Point center1,center2,mass_center;
+	//vector<RotatedRect>minEllipse;//minRect;
+	RotatedRect minRect1,minRect2;
+	Point2f rect_points1[4],rect_points2[4];
 	vector<Vec4i> hierarchy;
-	int i,j,k,aux,max_radio,count,count_all,num_frame=0;
-	Point mean_center;
+	int i,aux,aux2,max_radio,count_all,num_frame=0;
 	vector<int> finded(NUM_RINGS,0);
 
 	char text[40];
 
 	double start_time;
 
-	int all=0,full=0,retrack=0;
+	int all=0,full=0,retracks=0;
 
 	char c=(char)waitKey(3000);
 
@@ -61,6 +64,9 @@ int main(int argc, char const *argv[])
 		if(frame.empty())
 			break;
 		num_frame++;
+
+		sprintf(text,"Frame: %d",num_frame);
+		putText(frame,text,Point2f(15,20),FONT_HERSHEY_PLAIN,1.25,Scalar(0,0,255,255),1);
 
 		start_time=omp_get_wtime();
 
@@ -80,11 +86,9 @@ int main(int argc, char const *argv[])
 		findContours(edges,contours,hierarchy,CV_RETR_TREE,CHAIN_APPROX_NONE,Point(0,0)); //can change methods
 		//hierarchy [Next, Previous, First_Child, Parent]
 
-		count=contours.size();
-
-		//"delete" (HYERARCHY[2],[3]=-1) contours by size **24 < size < 256**
-		for(i=0;i<count;++i)
-			if(contours[i].size()>256)
+		//"delete" (HYERARCHY[2],[3]=-1) contours by size **MIN_ELLIPSE_POINTS < size < MAX_ELLIPSE_POINTS**
+		for(i=0;i<(int)contours.size();++i)
+			if(contours[i].size()>MAX_ELLIPSE_POINTS)
 			{
 				//eliminate in childs
 				aux=hierarchy[i][2];
@@ -100,7 +104,7 @@ int main(int argc, char const *argv[])
 				hierarchy[i][3]=-1;
 			}
 			else
-				if(contours[i].size()<24)
+				if(contours[i].size()<MIN_ELLIPSE_POINTS)
 				{
 					hierarchy[i][2]=-1;
 					//eliminate in father
@@ -113,8 +117,7 @@ int main(int argc, char const *argv[])
 				}
 
 		//"delete" (HYERARCHY[2],[3]=-1) father and childs, when the number of childs is bigger than 1
-		for(i=0;i<count;++i)
-		{
+		for(i=0;i<(int)contours.size();++i)
 			if(hierarchy[i][3]!=-1 && (hierarchy[i][0]!=-1 || hierarchy[i][1]!=-1))
 			{
 				hierarchy[hierarchy[i][3]][2]=-1;
@@ -122,139 +125,78 @@ int main(int argc, char const *argv[])
 				hierarchy[i][2]=-1;
 				hierarchy[i][3]=-1;
 			}
-		}
 
-		//save to contours_v the valid contours, %2 positions are father and %2+1 are child
-		contours_v.clear();
-		for(i=0;i<count;++i)
+		//Calculate centers
+		//minEllipse.clear();
+		center.clear();
+		for(i=0;i<(int)contours.size();++i)
 			if(hierarchy[i][2]!=-1)
 			{
-				contours_v.push_back(contours[i]);
-				contours_v.push_back(contours[hierarchy[i][2]]);
+				minRect1=minAreaRect(Mat(contours[i]));
+				minRect2=minAreaRect(Mat(contours[hierarchy[i][2]]));
+				minRect1.points(rect_points1);
+				minRect2.points(rect_points2);
+				center1=Point((rect_points1[0].x+rect_points1[2].x)/2,(rect_points1[0].y+rect_points1[2].y)/2);
+				center2=Point((rect_points2[0].x+rect_points2[2].x)/2,(rect_points2[0].y+rect_points2[2].y)/2);
+				if(sqrt(pow((center1.x-center2.x),2)+pow((center1.y-center2.y),2))<MAX_DISTANCE_CENTERS)
+				{
+					//minEllipse.push_back(fitEllipse(Mat(contours[i])));
+					//ellipse(frame,minEllipse.back(),Scalar(0,255,0),1,CV_AA);
+					//minEllipse.push_back(fitEllipse(Mat(contours[hierarchy[i][2]])));
+					//ellipse(frame,minEllipse.back(),Scalar(0,255,0),1,CV_AA);
+					center.push_back(Point((center1.x+center2.x)/2,(center1.y+center2.y)/2));
+					//circle(frame,center.back(),3.0,Scalar(0,255,0),-1,8);
+				}
 			}
 
-		count=contours_v.size();
-
-		//TODO: delete when count>NUM_ELLIPSES, center can help
-
-		//find the rotated rectangles, ellipses and centers
-		//minRect.resize(count);
-		minEllipse.resize(count);
-		center.resize(count);
-
-		max_radio=0;
-		for(i=0;i<count;++i)
+		//delete leftover rings
+		while(center.size()>NUM_RINGS && center.size()!=0)
 		{
-			minEllipse[i]=fitEllipse(Mat(contours_v[i]));
-			minRect=minAreaRect(Mat(contours_v[i]));
-			minRect.points(rect_points);
-			center[i]=Point((rect_points[0].x+rect_points[2].x)/2,(rect_points[0].y+rect_points[2].y)/2);
-			if(abs(rect_points[0].x-rect_points[2].x)/2>max_radio)
-				max_radio=abs(rect_points[0].x-rect_points[2].x)/2;
-			if(abs(rect_points[0].y-rect_points[2].y)/2>max_radio)
-				max_radio=abs(rect_points[0].y-rect_points[2].y)/2;
-
+			mass_center=Point(0,0);
+			for(i=0;i<(int)center.size();++i)
+				mass_center+=center[i];
+			mass_center.x/=center.size();
+			mass_center.y/=center.size();
+			aux=0;
+			aux2=sqrt(pow((mass_center.x-center[0].x),2)+pow((mass_center.y-center[0].y),2));
+			for(i=1;i<(int)center.size();++i)
+				if(sqrt(pow((mass_center.x-center[i].x),2)+pow((mass_center.y-center[i].y),2))>aux2)
+				{
+					aux=i;
+					aux2=sqrt(pow((mass_center.x-center[i].x),2)+pow((mass_center.y-center[i].y),2));
+				}
+			center.erase(center.begin()+aux);
+			//minEllipse.erase(minEllipse.begin()+(2*aux)); //TODO: falta probar no es necesario
+			//minEllipse.erase(minEllipse.begin()+(2*aux+1)); //TODO: falta probar no es necesario
 		}
+
+		//print the id-number of the ring
+		for(i=0;i<(int)center.size();i++)
+		{
+			circle(frame,center[i],3.0,Scalar(0,255,0),-1,CV_AA);
+			sprintf(text,"%d",i);
+			putText(frame,text,center[i],FONT_HERSHEY_PLAIN,2,Scalar(0,0,255,255),2);
+		}
+
+		sprintf(text,"Rings: %d",(int)center.size());
+		putText(frame,text,Point2f(15,40),FONT_HERSHEY_PLAIN,1.25,Scalar(0,0,255,255),1);
+
 
 		//TODO: using bounding boxes for teletransportation of bad friend
 
 		//TODO: for no rastered points, use the moviment of another points to predict the future location
 
-		for(i=0;i<count;++i)
-		{
-			ellipse(frame,minEllipse[i],Scalar(0,255,0),1,CV_AA);
-		}
-
-		sprintf(text,"Ellipses: %d/%d",count,count_all);
-			putText(frame,text,Point2f(15,85),FONT_HERSHEY_PLAIN,1.25,Scalar(0,0,255,255),1);
-
-		sprintf(text,"Frame: %d",num_frame);
-			putText(frame,text,Point2f(15,115),FONT_HERSHEY_PLAIN,1.25,Scalar(0,0,255,255),1);
-
-		//ex-post validation, distance of center heuristic
-		for(i=0;i<count;++i)
-			for(j=0;j<count;++j)
-				if(j!=i)
-					if(sqrt(pow((center[i].x-center[j].x),2)+pow((center[i].y-center[j].y),2))<4)
-					{
-						ellipse(frame,minEllipse[i],Scalar(0,255,0),1,CV_AA);
-						circle(frame,center[i],3.0,Scalar(0,255,0),-1,8);
-
-						ellipse(frame,minEllipse[j],Scalar(0,255,0),1,CV_AA);
-						circle(frame,center[j],3.0,Scalar(0,255,0),-1,8);
-
-						mean_center=Point((center[i].x+center[j].x)/2,(center[i].y+center[j].y)/2);
-
-						aux=0;
-						for(k=0;k<(int)center_v.size();++k)
-							if(sqrt(pow((center_v[k].x-mean_center.x),2)+pow((center_v[k].y-mean_center.y),2))<(max_radio+3))
-							{
-								center_v[k]=mean_center;
-								aux=1;
-								break;
-							}
-						if(aux==0)
-							center_loss.push_back(mean_center);
-						else
-							finded[k]=1;
-						center_aux.push_back(mean_center);
-
-						if(i<j) //delete the two matched ellipses
-						{
-							center.erase(center.begin()+j);
-							minEllipse.erase(minEllipse.begin()+j);
-
-							center.erase(center.begin()+i);
-							minEllipse.erase(minEllipse.begin()+i);
-						}
-						else
-						{
-							center.erase(center.begin()+i);
-							minEllipse.erase(minEllipse.begin()+i);
-
-							center.erase(center.begin()+j);
-							minEllipse.erase(minEllipse.begin()+j);
-							i--;
-						}
-
-						i--;
-						count=count-2;
-
-						break;
-					}
-
-		if(center_v.size()==0) //only when is the first frame or no one are matched
-		{
-			center_v=center_loss;
-			//fill(
-		}
-
-		if(center_loss.size()>2)
-		{
-			center_v=center_aux;
-			retrack++;
-		}
-		else
-			if(center_v.size()<NUM_RINGS)
-				center_v.insert(center_v.end(),center_loss.begin(),center_loss.end());
-
-		for(i=0;i<(int)center_v.size();++i)
-		{
-			sprintf(text,"%d",i);
-			putText(frame,text,center_v[i],FONT_HERSHEY_PLAIN,2,Scalar(0,0,255,255),2);
-		}
-
 		//put in rame some important data
 
-		if(center_v.size()==NUM_RINGS)
+		if(center.size()==NUM_RINGS)
 			full++;
 		all++;
 
 		sprintf(text,"Time: %.3f",omp_get_wtime()-start_time);
-		putText(frame,text,Point2f(15,25),FONT_HERSHEY_PLAIN,1.25,Scalar(0,0,255,255),1);
+		putText(frame,text,Point2f(15,60),FONT_HERSHEY_PLAIN,1.25,Scalar(0,0,255,255),1);
 
 		sprintf(text,"acc: %.2f",100.0*(float)full/float(all));
-		putText(frame,text,Point2f(15,55),FONT_HERSHEY_PLAIN,1.25,Scalar(0,0,255,255),1);
+		putText(frame,text,Point2f(15,80),FONT_HERSHEY_PLAIN,1.25,Scalar(0,0,255,255),1);
 
 		//TODO TODO: tracking of points based on the center and tracing lines
 		imshow( "Frame", frame );
@@ -264,9 +206,7 @@ int main(int argc, char const *argv[])
 		if(c==27)
 			break;
 
-		cout<<count_all<<"/"<<NUM_ELLIPSES<<"\n";
-
-		if(count_all>NUM_ELLIPSES)
+		if(num_frame==2310)
 			cin>>c;
 	}
 
@@ -274,7 +214,7 @@ int main(int argc, char const *argv[])
 
 	cout<<"\nPrecision:"<<100.0*(float)full/float(all);
 
-	cout<<"\nRe-track:"<<retrack;
+	cout<<"\nRe-track:"<<retracks;
 
 	// When everything done, release the video capture object
 	cap.release();
