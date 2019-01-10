@@ -42,16 +42,15 @@ int main(int argc, char const *argv[])
 	RotatedRect minRect1,minRect2;
 	Point2f rect_points1[4],rect_points2[4];
 	vector<Vec4i> hierarchy;
-	int i,j,aux,aux2,max_radio,count_all,num_frame=0,offset_x,offset_y;
+	int i,j,aux,aux2,num_frame=0,offset_x,offset_y;
 	vector<int> finded(NUM_RINGS);
+	char c;
 
 	char text[40];
 
 	double start_time;
 
 	int all=0,full=0,retracks=0;
-
-	char c=(char)waitKey(3000);
 
 	while(1)
 	{
@@ -262,7 +261,10 @@ int main(int argc, char const *argv[])
 
 		// Press  ESC on keyboard to exit
 
-		char c=(char)waitKey(50);
+		if(num_frame>500)
+			c=(char)waitKey(1000);
+		else
+			c=(char)waitKey(1);
 		if(c==27)
 			break;
 
