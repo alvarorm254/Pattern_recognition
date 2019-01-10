@@ -145,8 +145,6 @@ int main(int argc, char const *argv[])
 				}
 			}
 
-		if(center.size()!=NUM_RINGS)
-
 		//delete leftover rings
 		while(center.size()>NUM_RINGS && center.size()!=0)
 		{
@@ -177,34 +175,29 @@ int main(int argc, char const *argv[])
 
 		//calculate actual offset
 		offset_x=mass_center.x-last_mass_center.x;
-		offset_y=mass_center.y-last_mass_center.y
+		offset_y=mass_center.y-last_mass_center.y;
 
-		//move all centers with the offset
+		if(num_frame==1)
+		{
+			offset_x=0;
+			offset_y=0;
+		}
+
+		/*move all centers with the offset
 		for(i=0;i<(int)center.size();++i)
 		{
 			center[i].x+=offset_x;
 			center[i].y+=offset_y;
-		}
+		}*/
 
 		//match with last frame centers
 		fill(finded.begin(),finded.end(),0);
 		for(i=0;i<(int)last_center.size();++i)
-			for(j=0;j<(int)center.size();++i)
-				if(finded[j]==0)
-					if(sqrt(pow((last_center[i].x-center[j].x),2)+pow((last_center[i].y-center[j].y),2))<MAX_DISTANCE_CENTERS)
+			for(j=0;j<(int)center.size();++j)
+				if(finded[i]==0)
+					if(sqrt(pow((last_center[i].x-center[j].x),2)+pow((last_center[i].y-center[j].y),2))<MAX_DISTANCE_CENTERS*2)
 					{
-						finded[j]=1;
-						last_center[i]=center[j];
-					}
-
-		//match with last frame centers
-		fill(finded.begin(),finded.end(),0);
-		for(i=0;i<(int)last_center.size();++i)
-			for(j=0;j<(int)center.size();++i)
-				if(finded[j]==0)
-					if(sqrt(pow((last_center[i].x-center[j].x),2)+pow((last_center[i].y-center[j].y),2))<MAX_DISTANCE_CENTERS)
-					{
-						finded[j]=1;
+						finded[i]=1;
 						last_center[i]=center[j];
 					}
 
@@ -212,25 +205,45 @@ int main(int argc, char const *argv[])
 		for(std::vector<int>::iterator it=finded.begin();it!=finded.end();++it)
 		    aux+=*it;
 
-		if((float)aux>MIN_ACCEPTANCE*NUM_RINGS)
+		cout<<"\naux: "<<aux<<"\t center: "<<center.size()<<"\tvalor"<<MIN_ACCEPTANCE*NUM_RINGS;
+
+		//verify the quality of match
+		if((float)aux>MIN_ACCEPTANCE*NUM_RINGS) //acceptate last centers
 		{
-			
+			cout<<".";
+			for(i=0;i<(int)last_center.size();++i)
+				if(finded[i]==0)
+				{
+					last_center[i].x+=offset_x;
+					last_center[i].y+=offset_y;
+				}
+		}
+		else
+		{
+			if((float)center.size()>MIN_ACCEPTANCE*NUM_RINGS) //retracking
+			{
+				cout<<":";
+				++retracks;
+				last_center.clear();
+				for(i=0;i<(int)center.size();++i)
+				{
+					last_center.push_back(center[i]);
+					finded[i]=1;
+				}
+			}
 		}
 
+
 		//print the id-number of the ring
-		for(i=0;i<(int)center.size();++i)
+		for(i=0;i<(int)last_center.size();++i)
 		{
 			circle(frame,center[i],3.0,Scalar(0,255,0),-1,CV_AA);
 			sprintf(text,"%d",i);
-			putText(frame,text,center[i],FONT_HERSHEY_PLAIN,2,Scalar(0,0,255,255),2);
+			putText(frame,text,last_center[i],FONT_HERSHEY_PLAIN,2,Scalar(0,0,255,255),2);
 		}
 
 		sprintf(text,"Rings: %d",(int)center.size());
 		putText(frame,text,Point2f(15,40),FONT_HERSHEY_PLAIN,1.25,Scalar(0,0,255,255),1);
-
-		//TODO: using bounding boxes for teletransportation of bad friend
-
-		//TODO: for no rastered points, use the moviment of another points to predict the future location
 
 		//put in rame some important data
 
@@ -248,12 +261,13 @@ int main(int argc, char const *argv[])
 		imshow( "Frame", frame );
 
 		// Press  ESC on keyboard to exit
-		char c=(char)waitKey(1);
+
+		char c=(char)waitKey(50);
 		if(c==27)
 			break;
 
-		if(num_frame==2310)
-			cin>>c;
+		/*if(num_frame==2310)
+			cin>>c;*/
 	}
 
 	cout<<"\nNumber of frames: "<<all;
