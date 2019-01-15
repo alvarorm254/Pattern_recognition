@@ -9,61 +9,85 @@
 
 #include <opencv2/highgui/highgui.hpp>
 #include "integral_threshold.h"
+#include "rings_functions.h"
+#include "iterativo.h"
 //#include <opencv2/plot.hpp>
+#include <opencv2/core/core.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <sstream>
+#include <vector>
+#include <math.h>
+#include <fstream>
 
 #include <cmath>
 
-#define ROWS 3
-#define COLS 4
+#define ROWS 4
+#define COLS 5
 #define NUM_RINGS ROWS*COLS
 #define NUM_ELLIPSES ROWS*COLS*2
 #define THREAD_COUNT 8
-#define MIN_ELLIPSE_POINTS 24
+#define MIN_ELLIPSE_POINTS 16
 #define MAX_ELLIPSE_POINTS 256
 #define MAX_DISTANCE_CENTERS 4
-#define MIN_ACCEPTANCE 0.8
 
 using namespace std;
 using namespace cv;
 
-int main(int argc, char const *argv[])
+int main()
 {
 	//Read video (or camera) & test
-	VideoCapture cap("../padron1.avi");
+	VideoCapture cap("../cam2/anillos.avi");
 	if(!cap.isOpened())
 		return -1;
 
 	//Declare variables
-	Mat frame,edges,gray,gaussian; //ellipse_shape=getStructuringElement(MORPH_ELLIPSE,Size(2,2),Point(1,1));
-	vector<vector<Point>>contours;
-	vector<Point>center,last_center;
-	Point center1,center2,mass_center,last_mass_center;
-	//vector<RotatedRect>minEllipse;//minRect;
-	RotatedRect minRect1,minRect2;
-	Point2f rect_points1[4],rect_points2[4];
-	vector<Vec4i> hierarchy;
-	int i,j,aux,aux2,num_frame=0,offset_x,offset_y;
-	vector<int> finded(NUM_RINGS);
-	char c;
+	int nuf = 60;
+	vector<Point2f> arrange,int_arrange,org_arrange;
+	vector<vector<Point2f>>int_points,fin_points;
+	vector<Mat>int_frames,fin_frames;
+	Mat cameraMatrix, distCoeffs;
+	Mat rview, output;
+	Mat lambda(3,3,CV_32FC1);
+	vector<Point2f> corners;
+	corners.push_back(Point2f(2000, 2000)); //min
+	corners.push_back(Point2f(0, 0)); //max
+	double  error,AcErr=0;
+	bool retracking=1;
+	double tda=0;
 
 	char text[40];
 
 	double start_time;
 
-	int all=0,full=0,retracks=0;
+	//Declare variables
+	Mat frame,edges,gray,gaussian; //ellipse_shape=getStructuringElement(MORPH_ELLIPSE,Size(2,2),Point(1,1));
+	vector<vector<Point>>contours;
+	vector<Point2f>center;
+	Point2f center1,center2,mass_center,last_mass_center;
+	//vector<RotatedRect>minEllipse;//minRect;
+	RotatedRect minRect1,minRect2;
+	Point2f rect_points1[4],rect_points2[4];
+	vector<Vec4i> hierarchy;
+	int i,j,k,aux,aux2,num_frame=0,A,B,C;
+	vector<int> finded(NUM_RINGS);
+	char c;
+	
+	cap >> frame;
+
+	Size patternsize(COLS, ROWS);
+	Size imageSize = frame.size();
+	Mat bg_density(frame.rows, frame.cols, CV_8UC3, Scalar(255, 255, 255));
+	Mat bg_normalizado(frame.rows, frame.cols, CV_8UC3, Scalar(255, 255, 255));
+
+	RotatedRect minEllipse;
 
 	while(1)
 	{
 		//read and verify
 		cap>>frame;
-		if(frame.empty())
+		if (frame.empty())
 			break;
 		num_frame++;
-
-		sprintf(text,"Frame: %d",num_frame);
-		putText(frame,text,Point2f(15,20),FONT_HERSHEY_PLAIN,1.25,Scalar(0,0,255,255),1);
-
-		start_time=omp_get_wtime();
 
 		//to gray
 		cvtColor(frame,gray,cv::COLOR_RGB2GRAY);
@@ -72,14 +96,22 @@ int main(int argc, char const *argv[])
 		GaussianBlur(gray,gaussian,Size(3,3),0,0);
 
 		//to edges
-		//threshold(gaussian,edges,100,255,THRESH_BINARY);
 		edges=integral_threshold(gaussian,0.85);
+		imshow("output2",edges);
 
 		//find the contours of ellipses
 		contours.clear();
 		hierarchy.clear();
 		findContours(edges,contours,hierarchy,CV_RETR_TREE,CHAIN_APPROX_NONE,Point(0,0)); //can change methods
 		//hierarchy [Next, Previous, First_Child, Parent]
+
+		//early skip frame
+		if(contours.size()<NUM_RINGS*2)
+		{	
+			retracking=1;
+			imshow("output",frame);
+			continue;
+		}
 
 		//"delete" (HYERARCHY[2],[3]=-1) contours by size **MIN_ELLIPSE_POINTS < size < MAX_ELLIPSE_POINTS**
 		for(i=0;i<(int)contours.size();++i)
@@ -134,18 +166,19 @@ int main(int argc, char const *argv[])
 				center1=Point((rect_points1[0].x+rect_points1[2].x)/2,(rect_points1[0].y+rect_points1[2].y)/2);
 				center2=Point((rect_points2[0].x+rect_points2[2].x)/2,(rect_points2[0].y+rect_points2[2].y)/2);
 				if(sqrt(pow((center1.x-center2.x),2)+pow((center1.y-center2.y),2))<MAX_DISTANCE_CENTERS)
-				{
-					//minEllipse.push_back(fitEllipse(Mat(contours[i])));
-					//ellipse(frame,minEllipse.back(),Scalar(0,255,0),1,CV_AA);
-					//minEllipse.push_back(fitEllipse(Mat(contours[hierarchy[i][2]])));
-					//ellipse(frame,minEllipse.back(),Scalar(0,255,0),1,CV_AA);
 					center.push_back(Point((center1.x+center2.x)/2,(center1.y+center2.y)/2));
-					//circle(frame,center.back(),3.0,Scalar(0,255,0),-1,8);
-				}
 			}
 
+		//early skip frame		
+		if(center.size()<NUM_RINGS)
+		{	
+			retracking=1;
+			imshow("output",frame);
+			continue;
+		}
+
 		//delete leftover rings
-		while(center.size()>NUM_RINGS && center.size()!=0)
+		while(center.size()>NUM_RINGS) //&& center.size()!=0)
 		{
 			mass_center=Point(0,0);
 			for(i=0;i<(int)center.size();++i)
@@ -161,128 +194,97 @@ int main(int argc, char const *argv[])
 					aux2=sqrt(pow((mass_center.x-center[i].x),2)+pow((mass_center.y-center[i].y),2));
 				}
 			center.erase(center.begin()+aux);
-			//minEllipse.erase(minEllipse.begin()+(2*aux)); //TODO: falta probar no es necesario
-			//minEllipse.erase(minEllipse.begin()+(2*aux+1)); //TODO: falta probar no es necesario
 		}
 
-		//calculate center of mass
-		mass_center=Point(0,0);
-		for(i=0;i<(int)center.size();++i)
-			mass_center+=center[i];
-		mass_center.x/=center.size();
-		mass_center.y/=center.size();
+		detect_rings(frame, int_points, retracking, corners, int_frames, arrange,center);
+      	imshow("output",frame);
+    	
+		c=(char)waitKey(1);
+		if(c==27)
+			break;
+	}
 
-		//calculate actual offset
-		offset_x=mass_center.x-last_mass_center.x;
-		offset_y=mass_center.y-last_mass_center.y;
+	cap.release();
+	destroyAllWindows();
 
-		if(num_frame==1)
+	see_density(bg_density, int_points, "No_normalizado");
+	normalize_density_nuf(corners, int_points, fin_points, int_frames, fin_frames, nuf);
+	//get_random_samples(int_points, fin_points, int_frames, fin_frames, nuf);
+	see_density(bg_normalizado, fin_points, "Normalizado");
+
+	//write_samples(fin_frames);
+
+	double rms = calibrate_function(patternsize, imageSize, 45.75, cameraMatrix, distCoeffs, fin_points);
+
+	/*cout<<fin_frames.size();
+	for (size_t i = 0; i < 5; i++)
+	{
+		fin_points.clear();
+		for (size_t f = 0; f < fin_frames.size(); f++)
 		{
-			offset_x=0;
-			offset_y=0;
-		}
-
-		/*move all centers with the offset
-		for(i=0;i<(int)center.size();++i)
-		{
-			center[i].x+=offset_x;
-			center[i].y+=offset_y;
-		}*/
-
-		//match with last frame centers
-		fill(finded.begin(),finded.end(),0);
-		for(i=0;i<(int)last_center.size();++i)
-			for(j=0;j<(int)center.size();++j)
-				if(finded[i]==0)
-					if(sqrt(pow((last_center[i].x-center[j].x),2)+pow((last_center[i].y-center[j].y),2))<MAX_DISTANCE_CENTERS*2)
-					{
-						finded[i]=1;
-						last_center[i]=center[j];
-					}
-
-		aux=0;
-		for(std::vector<int>::iterator it=finded.begin();it!=finded.end();++it)
-		    aux+=*it;
-
-		cout<<"\naux: "<<aux<<"\t center: "<<center.size()<<"\tvalor"<<MIN_ACCEPTANCE*NUM_RINGS;
-
-		//verify the quality of match
-		if((float)aux>MIN_ACCEPTANCE*NUM_RINGS) //acceptate last centers
-		{
-			cout<<".";
-			for(i=0;i<(int)last_center.size();++i)
-				if(finded[i]==0)
-				{
-					last_center[i].x+=offset_x;
-					last_center[i].y+=offset_y;
-				}
-		}
-		else
-		{
-			if((float)center.size()>MIN_ACCEPTANCE*NUM_RINGS) //retracking
+			undistort(fin_frames[f], rview, cameraMatrix, distCoeffs);
+			imwrite("output.jpg",rview);
+			vector<Point2f> points = get_keypoints(rview);
+			if (points.size() == 20)
 			{
-				cout<<":";
-				++retracks;
-				last_center.clear();
-				for(i=0;i<(int)center.size();++i)
+				first_function(points, arrange);
+				frontImageRings(lambda, rview, output, arrange, patternsize);
+				//imshow("output2",output);
+				imwrite("output2.jpg",output);
+				//vector<Point2f> points2 = core_get_keypoints(output, 500, 1, 3);
+				vector<Point2f> points2 = core_get_keypoints(output, 200, 0, 1);
+				if (points2.size() == 20)
 				{
-					last_center.push_back(center[i]);
-					finded[i]=1;
+					cout<<"SI";
+					first_function(points2, arrange);
+					int_arrange = RectCorners(arrange, patternsize);
+					distortPoints(arrange, cameraMatrix, distCoeffs, lambda, patternsize);
+					distortPoints(int_arrange, cameraMatrix, distCoeffs, lambda, patternsize);
+					vector<Point2f> points3 = get_keypoints(fin_frames[f]);
+					if (points3.size() == 20)
+					{
+						first_function(points3, org_arrange);
+						for (size_t i = 0; i < arrange.size(); i++)
+						{
+							arrange[i].x = (arrange[i].x + int_arrange[i].x + org_arrange[i].x)/3;
+							arrange[i].y = (arrange[i].y + int_arrange[i].y + org_arrange[i].y)/3;
+						}
+						fin_points.push_back(arrange);
+					}
+				}
+				else
+				{
+					cout<<"NO";
 				}
 			}
 		}
+		cout<<fin_points.size()<<'\n';
+		double rms = calibrate_function(patternsize, imageSize, 44.3, cameraMatrix, distCoeffs, fin_points);
+		cout<<rms;
+	}*/
 
-
-		//print the id-number of the ring
-		for(i=0;i<(int)last_center.size();++i)
-		{
-			circle(frame,center[i],3.0,Scalar(0,255,0),-1,CV_AA);
-			sprintf(text,"%d",i);
-			putText(frame,text,last_center[i],FONT_HERSHEY_PLAIN,2,Scalar(0,0,255,255),2);
-		}
-
-		sprintf(text,"Rings: %d",(int)center.size());
-		putText(frame,text,Point2f(15,40),FONT_HERSHEY_PLAIN,1.25,Scalar(0,0,255,255),1);
-
-		//put in rame some important data
-
-		if(center.size()==NUM_RINGS)
-			full++;
-		all++;
-
-		sprintf(text,"Time: %.3f",omp_get_wtime()-start_time);
-		putText(frame,text,Point2f(15,60),FONT_HERSHEY_PLAIN,1.25,Scalar(0,0,255,255),1);
-
-		sprintf(text,"acc: %.2f",100.0*(float)full/float(all));
-		putText(frame,text,Point2f(15,80),FONT_HERSHEY_PLAIN,1.25,Scalar(0,0,255,255),1);
-
-		//TODO TODO: tracking of points based on the center and tracing lines
-		imshow( "Frame", frame );
-
-		// Press  ESC on keyboard to exit
-
-		if(num_frame>500)
-			c=(char)waitKey(1000);
-		else
-			c=(char)waitKey(1);
-		if(c==27)
-			break;
-
-		/*if(num_frame==2310)
-			cin>>c;*/
-	}
-
-	cout<<"\nNumber of frames: "<<all;
-
-	cout<<"\nPrecision:"<<100.0*(float)full/float(all);
-
-	cout<<"\nRe-track:"<<retracks;
-
-	// When everything done, release the video capture object
-	cap.release();
-
-	// Closes all the frames
 	destroyAllWindows();
+
+
+	//Read video (or camera) & test
+	VideoCapture cap2("../cam2/anillos.avi");
+	if(!cap2.isOpened())
+		return -1;
+
+	cap2 >> frame;
+
+	while(1)
+	{
+		cap2>>frame;
+		if (frame.empty())
+			break;
+		Mat temp = frame.clone();
+		undistort(temp, frame, cameraMatrix, distCoeffs);
+		imshow("undistort", frame );
+		c=(char)waitKey(1);
+    		if(c == 27)
+			break;
+	}
 
 	return 0;
 }
