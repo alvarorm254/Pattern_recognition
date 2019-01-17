@@ -11,14 +11,24 @@ void frontImageRings( Mat &lambda,Mat rview,Mat &output,vector<Point2f> &corners
   Point2f inputQuad[4];
   Point2f outputQuad[4];
 
-  inputQuad[0]=corners[15];
+  /*inputQuad[0]=corners[15];
   inputQuad[1]=corners[19];
   inputQuad[2]=corners[4];
   inputQuad[3]=corners[0];
   outputQuad[0]=Point2f( 55,55 );
   outputQuad[1]=Point2f( 555-1,55);
   outputQuad[2]=Point2f( 555-1,430-1);
-  outputQuad[3]=Point2f( 55,430-1);
+  outputQuad[3]=Point2f( 55,430-1);*/
+
+  inputQuad[0]=corners[15];
+  inputQuad[1]=corners[19];
+  inputQuad[2]=corners[4];
+  inputQuad[3]=corners[0];
+  outputQuad[0]=Point2f(55,55);
+  outputQuad[1]=Point2f(585,55);
+  outputQuad[2]=Point2f(585,305);
+  outputQuad[3]=Point2f(55,305);
+
   lambda=getPerspectiveTransform(inputQuad,outputQuad);
   warpPerspective(rview,output,lambda,output.size() );
   lambda=getPerspectiveTransform(outputQuad,inputQuad);

@@ -10,6 +10,8 @@
 #include <vector>
 #include <math.h>
 #include <ctime>
+#include "integral_threshold.h"
+
 
 using namespace std;
 using namespace cv;
@@ -323,7 +325,7 @@ bool affection(vector<Point2f> arrange, vector<Point2f> crs, vector<vector<Point
         for (size_t k = 0; k < arrange.size(); k++)
             for (size_t i = lts[0].x; i <= lts[1].x; i++)
                 if((i-1)*p_x < arrange[k].x && arrange[k].x < i*p_x)
-                    for (size_t j = lts[0].y; j <= lts[1].y; j++)
+                    for (size_t j = lts[0].y; j <= lt3d calibration s[1].y; j++)
                         if((j-1)*p_y < arrange[k].y && arrange[k].y < j*p_y)
                             dd[j-1][i-1]++;
     return flag;
@@ -368,14 +370,122 @@ void get_random_samples(vector<vector<Point2f> > input, vector<vector<Point2f> >
         fin_frames.push_back(int_frames[indx[k*sv]]);
         k++;
     }
+} 
+
+vector<Point2f> get_keypoints(Mat frame,int fronto=0)
+{
+	int max_size=256;
+	if(fronto==1)
+		max_size=360;
+	vector<Point2f> center;
+	Mat edges,gray,gaussian;
+    	vector<vector<Point>>contours;
+	Point2f center1,center2,mass_center;
+	RotatedRect minRect1,minRect2;
+	Point2f rect_points1[4],rect_points2[4];
+	vector<Vec4i> hierarchy;
+	int aux,aux2;
+	cvtColor(frame,gray,cv::COLOR_RGB2GRAY);
+	GaussianBlur(gray,gaussian,Size(3,3),0,0);
+	edges=integral_threshold(gaussian,0.85);
+	if(fronto==1)
+		imwrite("edges.jpg",frame);
+
+	hierarchy.clear();
+	findContours(edges,contours,hierarchy,CV_RETR_TREE,CHAIN_APPROX_NONE,Point(0,0));
+	//hierarchy [Next, Previous, First_Child, Parent]
+	
+	if(contours.size()<20*2)
+		return center;
+
+	if(fronto==1)
+	{
+		RotatedRect minEllipse;
+		for(int i=0;i<(int)contours.size();++i)
+			if(contours[i].size()>5)
+			{
+				minEllipse=fitEllipse(Mat(contours[i]));
+				ellipse(frame,minEllipse,Scalar(0,255,0),1,CV_AA);
+			}
+	}
+		
+	if(fronto==1)
+		imwrite("detectado.jpg",frame);
+
+	for(int i=0;i<(int)contours.size();++i)
+		if(contours[i].size()>max_size)
+		{
+			aux=hierarchy[i][2];
+			while(aux!=-1)
+			{
+				hierarchy[aux][3]=hierarchy[i][3];
+				aux=hierarchy[aux][0];
+			}
+			if(hierarchy[hierarchy[i][3]][2]==i)
+				hierarchy[hierarchy[i][3]][2]=hierarchy[i][0];
+			hierarchy[i][2]=-1;
+			hierarchy[i][3]=-1;
+		}
+		else
+			if(contours[i].size()<16)
+			{
+				hierarchy[i][2]=-1;
+				if(hierarchy[i][3]!=-1)
+				{
+					if(hierarchy[hierarchy[i][3]][2]==i)
+						hierarchy[hierarchy[i][3]][2]=hierarchy[i][0];
+					hierarchy[i][3]=-1;
+				}
+			}
+
+	for(int i=0;i<(int)contours.size();++i)
+		if(hierarchy[i][3]!=-1 && (hierarchy[i][0]!=-1 || hierarchy[i][1]!=-1))
+		{
+			hierarchy[hierarchy[i][3]][2]=-1;
+			hierarchy[hierarchy[i][3]][3]=-1;
+			hierarchy[i][2]=-1;
+			hierarchy[i][3]=-1;
+		}
+	for(int i=0;i<(int)contours.size();++i)
+		if(hierarchy[i][2]!=-1)
+		{
+			minRect1=minAreaRect(Mat(contours[i]));
+			minRect2=minAreaRect(Mat(contours[hierarchy[i][2]]));
+			minRect1.points(rect_points1);
+			minRect2.points(rect_points2);
+			center1=Point((rect_points1[0].x+rect_points1[2].x)/2,(rect_points1[0].y+rect_points1[2].y)/2);
+			center2=Point((rect_points2[0].x+rect_points2[2].x)/2,(rect_points2[0].y+rect_points2[2].y)/2);
+			if(sqrt(pow((center1.x-center2.x),2)+pow((center1.y-center2.y),2))<4)
+				center.push_back(Point((center1.x+center2.x)/2,(center1.y+center2.y)/2));
+		}
+	/*if(center.size()<NUM_RINGS) //early stop
+		return center;*/
+	while(center.size()>20) //&& center.size()!=0)
+	{
+		mass_center=Point(0,0);
+		for(int i=0;i<(int)center.size();++i)
+			mass_center+=center[i];
+		mass_center.x/=center.size();
+		mass_center.y/=center.size();
+		aux=0;
+		aux2=sqrt(pow((mass_center.x-center[0].x),2)+pow((mass_center.y-center[0].y),2));
+		for(int i=1;i<(int)center.size();++i)
+			if(sqrt(pow((mass_center.x-center[i].x),2)+pow((mass_center.y-center[i].y),2))>aux2)
+			{
+				aux=i;
+				aux2=sqrt(pow((mass_center.x-center[i].x),2)+pow((mass_center.y-center[i].y),2));
+			}
+		center.erase(center.begin()+aux);
+	}
+	return center;
 }
 
-void detect_rings(Mat &frame, vector<vector<Point2f> > &int_points, bool &first_flag,vector<Point2f> &corners, vector<Mat> &int_frames, vector<Point2f> &arrange,vector<Point2f> points)
+void detect_rings(Mat &frame, vector<vector<Point2f> > &int_points, bool &first_flag,vector<Point2f> &corners, vector<Mat> &int_frames, vector<Point2f> &arrange)
 {
-    //vector<Point2f> points = get_keypoints(frame);
-    if (points.size() == 20)
-    {
-        if(first_flag)
+	vector<Point2f> points=get_keypoints(frame);
+	if (points.size() == 20)
+	{
+		if(first_flag)
         {
             first_flag = 0;
             first_function(points, arrange);
@@ -409,7 +519,7 @@ void detect_rings(Mat &frame, vector<vector<Point2f> > &int_points, bool &first_
     }
     else
     {
-    first_flag = 1;
+    	first_flag = 1;
     }
 }
 
