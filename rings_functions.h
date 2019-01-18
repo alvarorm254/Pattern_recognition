@@ -325,7 +325,7 @@ bool affection(vector<Point2f> arrange, vector<Point2f> crs, vector<vector<Point
         for (size_t k = 0; k < arrange.size(); k++)
             for (size_t i = lts[0].x; i <= lts[1].x; i++)
                 if((i-1)*p_x < arrange[k].x && arrange[k].x < i*p_x)
-                    for (size_t j = lts[0].y; j <= lt3d calibration s[1].y; j++)
+                    for (size_t j = lts[0].y; j <= lts[1].y; j++)
                         if((j-1)*p_y < arrange[k].y && arrange[k].y < j*p_y)
                             dd[j-1][i-1]++;
     return flag;
@@ -523,7 +523,7 @@ void detect_rings(Mat &frame, vector<vector<Point2f> > &int_points, bool &first_
     }
 }
 
-double calibrate_function(Size patternsize, Size imageSize, float rm, Mat &cameraMatrix, Mat &distCoeffs, vector<vector<Point2f> > fin_points)
+double calibrate_function(Size patternsize, Size imageSize, float rm, Mat &cameraMatrix, Mat &distCoeffs, vector<vector<Point2f> > fin_points,int show=0)
 {
     vector<Point3f> vectorPoints;
     vector<vector<Point3f> > objectPoints;
@@ -542,7 +542,11 @@ double calibrate_function(Size patternsize, Size imageSize, float rm, Mat &camer
     distCoeffs = Mat::zeros(8, 1, CV_64F);
     double rms = calibrateCamera(objectPoints, fin_points, imageSize, cameraMatrix, distCoeffs, rvecs, tvecs);
     std::cout << "error = "<< rms << '\n';
-    std::cout << "cameraMatrix = "<< cameraMatrix << '\n';
-    std::cout << "distCoeffs = "<< distCoeffs << '\n';
+	if(show==1)
+	{
+	std::cout << "cameraMatrix = "<< cameraMatrix << '\n';
+    	std::cout << "distCoeffs = "<< distCoeffs << '\n';
+	}    
+	
     return rms;
 }

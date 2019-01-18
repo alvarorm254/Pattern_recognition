@@ -8,9 +8,12 @@ using namespace std;
 using namespace cv;
 
 void frontImageRings( Mat &lambda,Mat rview,Mat &output,vector<Point2f> &corners,Size patternsize){
-  Point2f inputQuad[4];
-  Point2f outputQuad[4];
+  /*Point2f inputQuad[4];
+  Point2f outputQuad[4];*/
 
+  vector<Point2f>inputQuad(20);
+  vector<Point2f>outputQuad(20);
+  
   /*inputQuad[0]=corners[15];
   inputQuad[1]=corners[19];
   inputQuad[2]=corners[4];
@@ -20,18 +23,36 @@ void frontImageRings( Mat &lambda,Mat rview,Mat &output,vector<Point2f> &corners
   outputQuad[2]=Point2f( 555-1,430-1);
   outputQuad[3]=Point2f( 55,430-1);*/
 
-  inputQuad[0]=corners[15];
+  for(int i=0;i<20;++i)
+	inputQuad[i]=corners[i];
+
+  for(int i=0;i<5;++i)
+	for(int j=0;j<4;++j)
+		outputQuad[j*5+i]=Point2f(80+i*128,80+j*128);
+  
+  /*inputQuad[0]=corners[15];
   inputQuad[1]=corners[19];
   inputQuad[2]=corners[4];
   inputQuad[3]=corners[0];
-  outputQuad[0]=Point2f(55,55);
-  outputQuad[1]=Point2f(585,55);
-  outputQuad[2]=Point2f(585,305);
-  outputQuad[3]=Point2f(55,305);
+  outputQuad[0]=Point2f(80,64);
+  outputQuad[1]=Point2f(720,64);
+  outputQuad[2]=Point2f(720,576);
+  outputQuad[3]=Point2f(80,576);
 
   lambda=getPerspectiveTransform(inputQuad,outputQuad);
-  warpPerspective(rview,output,lambda,output.size() );
+  warpPerspective(rview,output,lambda,Size(800,640));
   lambda=getPerspectiveTransform(outputQuad,inputQuad);
+
+  outputQuad[0]=Point2f(80,80);
+  outputQuad[1]=Point2f(592,80);
+  outputQuad[2]=Point2f(592,464);
+  outputQuad[3]=Point2f(80,464);*/
+
+  //lambda=getPerspectiveTransform(inputQuad,outputQuad);
+  lambda=findHomography(inputQuad,outputQuad);
+  warpPerspective(rview,output,lambda,Size(672,544));
+  //lambda=getPerspectiveTransform(outputQuad,inputQuad);
+  lambda=findHomography(outputQuad,inputQuad);
 }
 
 void distortPoints(vector<Point2f> &corners,Mat cameraMatrix,Mat distCoeffs,Mat lambda,Size patternsize) {

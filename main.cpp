@@ -35,6 +35,7 @@ using namespace cv;
 int main()
 {
 	//Read video (or camera) & test
+	//VideoCapture cap("../cam1/anillos2.mp4");
 	VideoCapture cap("../cam2/anillos.avi");
 	if(!cap.isOpened())
 		return -1;
@@ -99,7 +100,7 @@ int main()
 	double rms = calibrate_function(patternsize, imageSize, 44, cameraMatrix, distCoeffs, fin_points);
 
 	cout<<fin_frames.size();
-	for (size_t i=0;i<5;++i)
+	for (size_t i=0;i<0;++i)
 	{
 		fin_points.clear();
 		//arrange.clear();
@@ -117,17 +118,18 @@ int main()
 				{
 					//cout<<"1";
 					first_function(points,arrange);
-					cout<<"."<<arrange.size()<<".";
+					//cout<<"."<<arrange.size()<<".";
 					//distortPoints(arrange,cameraMatrix,distCoeffs,lambda,patternsize);
 					if(arrange.size()==20)
 						fin_points.push_back(arrange);
 				}
 			}
 		}
-		cout<<fin_points.size()<<'\n';
+		//cout<<fin_points.size()<<'\n';
 		rms = calibrate_function(patternsize,imageSize,44,cameraMatrix,distCoeffs,fin_points);
 		//cout<<rms;
 	}
+	rms = calibrate_function(patternsize,imageSize,44,cameraMatrix,distCoeffs,fin_points,1);
 
 	//convertPointsToHomogeneous(points2d, points3d);
 	//projectPoints(points3d, cv::Vec3f(0,0,0), cv::Vec3f(0,0,0), camera_matrix, dist_coeffs, distorted_points2d);
@@ -135,23 +137,39 @@ int main()
 
 	destroyAllWindows();
 
-
 	//Read video (or camera) & test
 	VideoCapture cap2("../cam2/anillos.avi");
+	//VideoCapture cap2("../cam1/anillos2.mp4");
 	if(!cap2.isOpened())
 		return -1;
 
 	cap2 >> frame;
-
+	
+	int_points.clear();
+	retracking=1;
+	int_frames.clear();
+	arrange.clear();
+	
 	while(1)
 	{
 		cap2>>frame;
 		if (frame.empty())
 			break;
-		Mat temp = frame.clone();
-		undistort(temp, frame, cameraMatrix, distCoeffs);
-		imshow("undistort", frame );
-		c=(char)waitKey(1);
+		Mat temp=frame.clone();
+		undistort(temp,frame,cameraMatrix,distCoeffs);
+		imshow("output", frame );
+		vector<Point2f> points=get_keypoints(frame);
+		if(points.size()==20)
+		{		
+			first_function(points,arrange);
+			if(arrange.size()==20)
+			{
+				frontImageRings(lambda,frame,rview,arrange,patternsize);
+				resize(rview,rview,Size(),0.5,0.5,CV_INTER_CUBIC);
+				imshow("fronto", rview );
+			}
+		}
+		c=(char)waitKey(20);
     		if(c == 27)
 			break;
 	}
