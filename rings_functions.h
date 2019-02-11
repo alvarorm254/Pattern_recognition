@@ -208,6 +208,26 @@ void first_function(vector<Point2f> points, vector<Point2f> &arrange)
     fill_arrange(points, arrange , nr, corners, axis_x, dis_x, axis_y, dis_y);
 }
 
+void first_function_fp(vector<Point2f> points, vector<Point2f> &arrange)
+{
+	int ROWS=4,COLS=5;
+	Point2f aux;
+    arrange=points;
+    for(int i=0;i<ROWS;i++)
+		for(int j=1;j<COLS;j++)
+			for(int k=j;k>0;k--)
+			{
+				if(arrange[i*COLS+k].x<arrange[i*COLS+k-1].x)
+				{
+		    		aux=arrange[i*COLS+k];
+		    		arrange[i*COLS+k]=arrange[i*COLS+k-1];
+		    		arrange[i*COLS+k-1]=aux;
+				}
+				else
+		   			break;
+	    	}
+}
+
 vector<Point2f> get_limits(vector<Point2f> arrange)
 {
     vector<Point2f> limits;
@@ -374,9 +394,9 @@ void get_random_samples(vector<vector<Point2f> > input, vector<vector<Point2f> >
 
 vector<Point2f> get_keypoints(Mat frame,int fronto=0)
 {
-	int max_size=256;
+	int max_diff=4;
 	if(fronto==1)
-		max_size=360;
+		max_diff=32;
 	vector<Point2f> center;
 	Mat edges,gray,gaussian;
     	vector<vector<Point>>contours;
@@ -388,15 +408,24 @@ vector<Point2f> get_keypoints(Mat frame,int fronto=0)
 	cvtColor(frame,gray,cv::COLOR_RGB2GRAY);
 	GaussianBlur(gray,gaussian,Size(3,3),0,0);
 	edges=integral_threshold(gaussian,0.85);
-	if(fronto==1)
-		imwrite("edges.jpg",frame);
 
 	hierarchy.clear();
 	findContours(edges,contours,hierarchy,CV_RETR_TREE,CHAIN_APPROX_NONE,Point(0,0));
 	//hierarchy [Next, Previous, First_Child, Parent]
 	
-	if(contours.size()<20*2)
+/*	if(contours.size()<20*2)
+	{
+		cout<<endl<<"menos de 40 contornos";
+		RotatedRect minEllipse;
+		for(int i=0;i<(int)contours.size();++i)
+			if(contours[i].size()>5)
+			{
+				minEllipse=fitEllipse(Mat(contours[i]));
+				ellipse(frame,minEllipse,Scalar(0,255,0),1,CV_AA);
+			}
+		imwrite("menosde40.jpg",frame);
 		return center;
+	}
 
 	if(fronto==1)
 	{
@@ -407,13 +436,14 @@ vector<Point2f> get_keypoints(Mat frame,int fronto=0)
 				minEllipse=fitEllipse(Mat(contours[i]));
 				ellipse(frame,minEllipse,Scalar(0,255,0),1,CV_AA);
 			}
-	}
+		imwrite("edges.jpg",frame);
+	}*/
 		
 	if(fronto==1)
 		imwrite("detectado.jpg",frame);
 
 	for(int i=0;i<(int)contours.size();++i)
-		if(contours[i].size()>max_size)
+		if(contours[i].size()>256)
 		{
 			aux=hierarchy[i][2];
 			while(aux!=-1)
@@ -455,7 +485,7 @@ vector<Point2f> get_keypoints(Mat frame,int fronto=0)
 			minRect2.points(rect_points2);
 			center1=Point((rect_points1[0].x+rect_points1[2].x)/2,(rect_points1[0].y+rect_points1[2].y)/2);
 			center2=Point((rect_points2[0].x+rect_points2[2].x)/2,(rect_points2[0].y+rect_points2[2].y)/2);
-			if(sqrt(pow((center1.x-center2.x),2)+pow((center1.y-center2.y),2))<4)
+			if(sqrt(pow((center1.x-center2.x),2)+pow((center1.y-center2.y),2))<max_diff)
 				center.push_back(Point((center1.x+center2.x)/2,(center1.y+center2.y)/2));
 		}
 	/*if(center.size()<NUM_RINGS) //early stop

@@ -35,13 +35,13 @@ using namespace cv;
 int main()
 {
 	//Read video (or camera) & test
-	//VideoCapture cap("../cam1/anillos2.mp4");
-	VideoCapture cap("../cam2/anillos.avi");
+	VideoCapture cap("../cam1/anillos2.mp4");
+	//VideoCapture cap("../cam2/anillos.avi");
 	if(!cap.isOpened())
 		return -1;
 
 	//Declare variables
-	int nuf = 60;
+	int nuf = 12;
 	vector<Point2f> arrange,int_arrange,org_arrange;
 	vector<vector<Point2f>> int_points,fin_points;
 	vector<Mat> int_frames,fin_frames;
@@ -100,40 +100,48 @@ int main()
 	double rms = calibrate_function(patternsize, imageSize, 44, cameraMatrix, distCoeffs, fin_points);
 
 	cout<<fin_frames.size();
-	for (size_t i=0;i<0;++i)
+	for (size_t i=0;i<60;++i)
 	{
 		fin_points.clear();
-		//arrange.clear();
 		for (size_t f=0;f<fin_frames.size();++f)
 		{
+			org_arrange.clear();
+			arrange.clear();
 			undistort(fin_frames[f],rview,cameraMatrix,distCoeffs);
 			vector<Point2f> points=get_keypoints(rview);
 			if(points.size()==20)
 			{
 				first_function(points,org_arrange);
 				frontImageRings(lambda,rview,output,org_arrange,patternsize);
-				imwrite("output3.jpg",output);
 				vector<Point2f> points2=get_keypoints(output,1);
-				if (points2.size()==20)
+				if(points2.size()==20)
 				{
-					//cout<<"1";
-					first_function(points,arrange);
-					//cout<<"."<<arrange.size()<<".";
-					//distortPoints(arrange,cameraMatrix,distCoeffs,lambda,patternsize);
+					first_function_fp(points2,arrange);
+					distortPoints(arrange,cameraMatrix,distCoeffs,lambda,patternsize);
+					distortPoints(org_arrange,cameraMatrix,distCoeffs,lambda,patternsize);
+					int_arrange=RectCorners(arrange,patternsize);
+					//cout<<endl<<endl<<endl;
+					/*for(int i=0;i<(int)arrange.size();++i)
+						cout<<i<<" "<<arrange[i].x<<" : "<<arrange[i].y<<endl;
+					for(int i=0;i<(int)org_arrange.size();++i)
+						cout<<i<<" "<<org_arrange[i].x<<" : "<<org_arrange[i].y<<endl;*/
 					if(arrange.size()==20)
+					{
+						for(int i=0;i<(int)arrange.size();++i)
+							arrange[i]=(org_arrange[i]+arrange[i]+int_arrange[i])/3;
 						fin_points.push_back(arrange);
+					}
 				}
 			}
 		}
 		//cout<<fin_points.size()<<'\n';
 		rms = calibrate_function(patternsize,imageSize,44,cameraMatrix,distCoeffs,fin_points);
-		//cout<<rms;
+		cout<<"error "<<i<<": "<<rms<<endl;
 	}
 	rms = calibrate_function(patternsize,imageSize,44,cameraMatrix,distCoeffs,fin_points,1);
 
 	//convertPointsToHomogeneous(points2d, points3d);
 	//projectPoints(points3d, cv::Vec3f(0,0,0), cv::Vec3f(0,0,0), camera_matrix, dist_coeffs, distorted_points2d);
-
 
 	destroyAllWindows();
 

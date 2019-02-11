@@ -147,7 +147,7 @@ void rectaVer (vector<Point2f> corners,Size patternsize,std::vector<double> &m,s
   }
 }
 
-vector<Point2f> RectCorners (vector<Point2f> corners,Size patternsize){
+vector<Point2f> RectCorners(vector<Point2f> corners,Size patternsize){
   double y,x;
   std::vector<Point2f> points;
   std::vector<double> b1(patternsize.height),m1(patternsize.height),b2(patternsize.width),m2(patternsize.width);
