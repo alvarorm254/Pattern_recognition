@@ -32,16 +32,16 @@
 using namespace std;
 using namespace cv;
 
-int main()
+int main(int argc, char *argv[])
 {
 	//Read video (or camera) & test
-	VideoCapture cap("../cam1/anillos2.mp4");
+	VideoCapture cap(argv[1]);
 	//VideoCapture cap("../cam2/anillos.avi");
 	if(!cap.isOpened())
 		return -1;
 
 	//Declare variables
-	int nuf = 12;
+	int nuf = 30;
 	vector<Point2f> arrange,int_arrange,org_arrange;
 	vector<vector<Point2f>> int_points,fin_points;
 	vector<Mat> int_frames,fin_frames;
@@ -95,12 +95,12 @@ int main()
 	see_density(bg_normalizado, fin_points, "Normalizado");
 
 	//write_samples(fin_frames);
-	cout<<"\nfin_points: "<<fin_points.size();
+	//cout<<"\nfin_points: "<<fin_points.size();
 
 	double rms = calibrate_function(patternsize, imageSize, 44, cameraMatrix, distCoeffs, fin_points);
 
-	cout<<fin_frames.size();
-	for (size_t i=0;i<60;++i)
+	//cout<<fin_frames.size();
+	for (size_t i=0;i<10;++i)
 	{
 		fin_points.clear();
 		for (size_t f=0;f<fin_frames.size();++f)
@@ -136,7 +136,7 @@ int main()
 		}
 		//cout<<fin_points.size()<<'\n';
 		rms = calibrate_function(patternsize,imageSize,44,cameraMatrix,distCoeffs,fin_points);
-		cout<<"error "<<i<<": "<<rms<<endl;
+		//cout<<"error "<<i<<": "<<rms<<endl;
 	}
 	rms = calibrate_function(patternsize,imageSize,44,cameraMatrix,distCoeffs,fin_points,1);
 
@@ -146,7 +146,7 @@ int main()
 	destroyAllWindows();
 
 	//Read video (or camera) & test
-	VideoCapture cap2("../cam2/anillos.avi");
+	VideoCapture cap2(argv[1]);
 	//VideoCapture cap2("../cam1/anillos2.mp4");
 	if(!cap2.isOpened())
 		return -1;
