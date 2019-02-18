@@ -24,7 +24,7 @@ Now, we need execute with this parameters
 
 When "../cam2/anillos.avi" is the video to calibrete and undistort.
 
-![alt text](https://raw.githubusercontent.com/alvarorm254/Pattern_recognition/branch/article-1.png)
-![alt text](https://raw.githubusercontent.com/alvarorm254/Pattern_recognition/branch/article-2.png)
-![alt text](https://raw.githubusercontent.com/alvarorm254/Pattern_recognition/branch/article-3.png)
-![alt text](https://raw.githubusercontent.com/alvarorm254/Pattern_recognition/branch/article-4.png)
+![alt text](https://github.com/alvarorm254/Pattern_recognition/raw/master/article-1.png)
+![alt text](https://github.com/alvarorm254/Pattern_recognition/raw/master/article-2.png)
+![alt text](https://github.com/alvarorm254/Pattern_recognition/raw/master/article-3.png)
+![alt text](https://github.com/alvarorm254/Pattern_recognition/raw/master/article-4.png)
